@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>NYC Noise Complaints Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        background-color: #f4f4f9;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .container {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        margin-top: 20px;
+        width: 80%;
+      }
+
+      .info-container {
+        flex: 1;
+        margin-right: 20px;
+      }
+
+      .map-container {
+        flex: 1;
+        border: 2px solid #ccc;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        background-color: #fff;
+        padding: 2px;
+      }
+
+      .zoom-instructions {
+        position: absolute;
+        bottom: 10px;
+        left: 80%;
+        transform: translateX(-50%);
+        background-color: rgba(0, 0, 0, 0.7);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 5px;
+        font-size: 14px;
+        opacity: 0.8;
+      }
+
+      .info-card {
+        background-color: white;
+        padding: 10px;
+        border: 2px solid black;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        font-size: 14px;
+        color: #333;
+        margin-bottom: 5px;
+        position: relative;
+      }
+
+      .close-btn {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background: red;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-size: 12px;
+        padding: 2px 5px;
+      }
+
+      .clear-btn {
+        margin-bottom: 10px;
+        padding: 5px 10px;
+        background-color: red;
+        color: white;
+        border: none;
+        cursor: pointer;
+      }
+
+      .tooltip {
+        position: absolute;
+        background-color: white;
+        padding: 5px;
+        border: 1px solid black;
+        display: none;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>NYC Noise Complaints</h1>
+    <label for="noiseType">Filter by Noise Type:</label>
+    <select id="noiseType">
+      <option value="all">All</option>
+    </select>
+    <button class="clear-btn" id="clear-all">Clear All</button>
+
+    <div class="container">
+      <div class="info-container" id="info-container"></div>
+      <div class="map-container">
+        <svg id="noise-map" width="600" height="600">
+          <g id="map-group"></g>
+        </svg>
+        <div class="zoom-instructions">
+          Scroll to Zoom & Drag to Move <br />
+          Click the Dots to See and Compare Data
+        </div>
+      </div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+      const width = 600;
+      const height = 600;
+      const svg = d3.select("#noise-map");
+      const g = d3.select("#map-group"); // Group to hold everything
+      const tooltip = d3.select("#tooltip");
+      const infoContainer = d3.select("#info-container");
+      const dropdown = d3.select("#noiseType");
+      const clearBtn = d3.select("#clear-all");
+      let selectedDots = new Map();
+      const colorScale = d3.scaleOrdinal(d3.schemeCategory10);
+
+      // Zoom & pan behavior
+      const zoom = d3
+        .zoom()
+        .scaleExtent([1, 10]) // Zoom between 1x and 10x
+        .translateExtent([
+          [0, 0],
+          [width, height],
+        ]) // Limit panning
+        .on("zoom", (event) => {
+          g.attr("transform", event.transform);
+        });
+
+      svg.call(zoom);
+
+      function drawNYCMap() {
+        const projection = d3
+          .geoMercator()
+          .scale(70000)
+          .center([-74, 40.7])
+          .translate([width / 2, height / 2]);
+        const path = d3.geoPath().projection(projection);
+        d3.json("nyc.geojson").then((geojson) => {
+          g.selectAll("path")
+            .data(geojson.features)
+            .enter()
+            .append("path")
+            .attr("d", path)
+            .attr("fill", "white")
+            .attr("stroke", "#333");
+        });
+      }
+
+      drawNYCMap();
+
+      async function loadData() {
+        let data = await d3.csv("CleanedNYC311data.csv");
+        const complaintTypes = Array.from(
+          new Set(data.map((d) => d["Complaint Type"]))
+        ).sort();
+        dropdown
+          .selectAll("option")
+          .data(["all", ...complaintTypes])
+          .enter()
+          .append("option")
+          .attr("value", (d) => d)
+          .text((d) => d);
+
+        function updateMap(filterType) {
+          selectedDots.clear();
+          infoContainer.html("");
+          let filteredData =
+            filterType === "all"
+              ? data
+              : data.filter((d) => d["Complaint Type"] === filterType);
+          const projection = d3
+            .geoMercator()
+            .scale(70000)
+            .center([-74, 40.7])
+            .translate([width / 2, height / 2]);
+
+          // Remove all existing circles
+          g.selectAll("circle").remove();
+
+          // Add non-selected circles
+          g.selectAll("circle")
+            .data(filteredData)
+            .enter()
+            .append("circle")
+            .attr("cx", (d) => projection([+d.Longitude, +d.Latitude])[0])
+            .attr("cy", (d) => projection([+d.Longitude, +d.Latitude])[1])
+            .attr("r", 2)
+            .attr("fill", "gray")
+            .attr("opacity", 0.7)
+            .style("cursor", "pointer") // Makes it clear it's clickable
+            .on("mouseover", (event, d) => {
+              tooltip
+                .style("display", "block")
+                .style("left", event.pageX + 10 + "px")
+                .style("top", event.pageY - 10 + "px")
+                .html(
+                  `<strong>${d["Complaint Type"]}</strong><br>${d.Descriptor}`
+                );
+            })
+            .on("mouseout", () => tooltip.style("display", "none"))
+            .on("click", function (event, d) {
+              if (selectedDots.has(d)) {
+                selectedDots.delete(d);
+                d3.select(this).attr("fill", "gray").attr("r", 2);
+              } else {
+                let color = colorScale(selectedDots.size);
+                selectedDots.set(d, color);
+                d3.select(this)
+                  .attr("fill", color)
+                  .attr("opacity", 1)
+                  .attr("r", 5);
+              }
+              renderInfoCards();
+              updateSelectedCircles();
+            });
+
+          renderInfoCards();
+          updateSelectedCircles();
+        }
+
+        function updateSelectedCircles() {
+          g.selectAll("circle")
+            .filter((d) => selectedDots.has(d))
+            .raise(); // Bring selected circles to top
+        }
+
+        function renderInfoCards() {
+          infoContainer.html("");
+          selectedDots.forEach((color, d) => {
+            let card = infoContainer
+              .append("div")
+              .attr("class", "info-card")
+              .style("border-color", color);
+            card.html(`
+            <button class="close-btn">x</button>
+            <strong>Borough:</strong> ${d.Borough}<br>
+            <strong>Complaint Type:</strong> ${d["Complaint Type"]}<br>
+            <strong>Description:</strong> ${d.Descriptor}<br>
+            <strong>Created Date:</strong> ${d["Created Date"]}<br>
+            <strong>Closed Date:</strong> ${d["Closed Date"] || "N/A"}<br>
+            <strong>City:</strong> ${d.City}<br>
+            <strong>Resolution:</strong> ${d["Resolution Description"]}
+          `);
+            card.select(".close-btn").on("click", () => {
+              card.remove();
+              g.selectAll("circle")
+                .filter((item) => item === d)
+                .remove();
+              selectedDots.delete(d);
+              data = data.filter((item) => item !== d);
+            });
+          });
+        }
+
+        dropdown.on("change", function () {
+          updateMap(this.value);
+        });
+        clearBtn.on("click", () => {
+          updateMap(dropdown.property("value"));
+          updateSelectedCircles();
+        });
+
+        updateMap("all");
+      }
+
+      loadData();
+    </script>
+  </body>
+</html>
