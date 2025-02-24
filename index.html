@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>NYC Noise Complaints Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        font-size: 16px;
+        background-color: #f4f7fc;
+        color: #333;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+      }
+
+      h1 {
+        font-family: "Impact", sans-serif;
+        color: #1e3d58;
+        text-transform: uppercase;
+        margin-top: 40px;
+        letter-spacing: 2px;
+        font-size: 50px;
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.4);
+      }
+
+      h2,
+      .label {
+        color: #4e7a8e;
+        font-size: 20px;
+        margin-bottom: 10px;
+        letter-spacing: 1px;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .container {
+        display: flex;
+        justify-content: center;
+        align-items: stretch;
+        margin-top: 20px;
+        width: 80%;
+      }
+
+      .info-container,
+      .map-container {
+        flex: 1;
+        height: 100%, 600px;
+      }
+
+      .info-container {
+        position: relative;
+        margin-right: 20px;
+        overflow-y: auto;
+        border: 2px solid #ccc;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        background-color: #fff;
+        padding: 10px;
+        max-height: 600px; /* Fixed max height */
+        width: 100%;
+        scrollbar-color: #1e3d58 #f4f7fc; /* Scrollbar color */
+      }
+
+      .info-container::-webkit-scrollbar {
+        width: 10px;
+      }
+
+      .info-container::-webkit-scrollbar-track {
+        background: #f4f7fc;
+        border-radius: 10px;
+      }
+
+      .info-container::-webkit-scrollbar-thumb {
+        background-color: #1e3d58;
+        border-radius: 10px;
+        border: 2px solid #f4f7fc;
+      }
+
+      .info-container::-webkit-scrollbar-thumb:hover {
+        background-color: #4e7a8e;
+      }
+      .map-container {
+        position: relative; /* Make sure the button is positioned relative to the map box */
+        border: 2px solid #ccc;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        background-color: #fff;
+        padding: 2px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .info-card {
+        background-color: white;
+        padding: 10px;
+        border: 2px solid black;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        font-size: 16px;
+        color: #333;
+        margin-bottom: 5px;
+        position: relative;
+      }
+
+      .close-btn {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background: red;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-size: 12px;
+        padding: 2px 5px;
+      }
+
+      select#noiseType {
+        padding: 10px;
+        font-size: 18px;
+        border-radius: 5px;
+        border: 2px solid #1e3d58;
+        background-color: #f0f4f8;
+        color: #1e3d58;
+        cursor: pointer;
+        margin-right: 10px;
+      }
+
+      select#noiseType:focus {
+        outline: none;
+        box-shadow: 0 0 5px rgba(30, 61, 88, 0.5);
+      }
+
+      .clear-btn {
+        padding: 10px 20px;
+        font-size: 18px;
+        background-color: #e74c3c;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      }
+
+      .clear-btn:hover {
+        background-color: #c0392b;
+      }
+
+      .clear-btn:active {
+        background-color: #a93226;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        transform: translateY(2px);
+      }
+
+      .zoom-instructions {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 20px;
+        text-align: center;
+        background-color: rgba(255, 255, 255, 0.9);
+        padding: 20px;
+        border: 2px solid #1e3d58;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        color: #1e3d58;
+        z-index: 1;
+        width: 80%;
+        max-width: 300px;
+        pointer-events: none;
+      }
+
+      .reset-zoom-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        padding: 5px 10px;
+        font-size: 12px;
+        background-color: #4e7a8e;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        z-index: 2;
+        transition: background-color 0.3s;
+      }
+
+      .reset-zoom-btn:hover {
+        background-color: #3a6473;
+      }
+
+      .reset-zoom-btn:active {
+        background-color: #1c6692;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        transform: translateY(2px);
+      }
+
+      #descriptions {
+        margin-left: 20px;
+        font-size: 16px;
+      }
+
+      .description-container {
+        width: 50%;
+        margin-left: 20px;
+      }
+
+      .pie-chart-box {
+        width: 78%;
+        border: 2px solid #ccc;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        background-color: #fff;
+        padding: 20px;
+        margin-top: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .pie-chart-box h2 {
+        color: #1e3d58;
+        margin-bottom: 20px;
+      }
+
+      .pie-chart-descriptions {
+        display: flex;
+        flex-direction: row;
+        padding-top: 20px;
+        justify-content: space-evenly;
+      }
+
+      #pie-chart {
+        display: flex;
+        width: 100%;
+        max-width: 400px;
+        height: auto;
+        margin-bottom: 20px;
+      }
+
+      #descriptions {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        text-align: left;
+        font-size: 16px;
+        color: #4e7a8e;
+        line-height: 1.5;
+      }
+
+      .borough-description {
+        margin-bottom: 10px;
+        border-bottom: 1px solid #ccc;
+        padding-bottom: 5px;
+      }
+
+      .borough-name {
+        font-weight: bold;
+        color: #1e3d58;
+      }
+
+      .borough-average {
+        color: #4e7a8e;
+      }
+
+      .borough-most-common {
+        font-style: italic;
+        color: #8b5e3c;
+      }
+
+      .tooltip {
+        position: absolute;
+        background-color: white;
+        padding: 5px;
+        border: 1px solid black;
+        display: none;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>NYC Noise Complaints</h1>
+    <div>
+      <label for="noiseType">Filter by Noise Type:</label>
+      <select id="noiseType">
+        <option value="all">All</option>
+      </select>
+      <button class="clear-btn" id="clear-all">Clear All</button>
+    </div>
+
+    <div class="container">
+      <div class="info-container" id="info-container">
+        <div class="zoom-instructions">
+          Scroll to Zoom & Drag to Move <br />
+          Click the Dots to See and Compare Data
+        </div>
+      </div>
+
+      <div class="map-container">
+        <button class="reset-zoom-btn" id="reset-zoom">Reset Zoom</button>
+        <svg id="noise-map" width="600" height="600">
+          <g id="map-group"></g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+    <div class="pie-chart-box">
+      <h2>Average Complaints by Borough</h2>
+      <div class="pie-chart-descriptions">
+        <svg id="pie-chart" width="400" height="400"></svg>
+        <div id="descriptions"></div>
+      </div>
+    </div>
+
+    <script>
+      const width = 600;
+      const height = 600;
+      const svg = d3.select("#noise-map");
+      const g = d3.select("#map-group");
+      const tooltip = d3.select("#tooltip");
+      const infoContainer = d3.select("#info-container");
+      const dropdown = d3.select("#noiseType");
+      const clearBtn = d3.select("#clear-all");
+      let selectedDots = new Map();
+      const colorScale = d3.scaleOrdinal().range([
+        "#1e3d58", // Dark blue
+        "#4e7a8e", // Lighter blue
+        "#8b5e3c", // Warm brownish color
+        "#bfa79d", // Light beige
+        "#c6a6d7", // Lavender
+        "#87b7c7", // Soft teal
+        "#9aaf8d", // Sage green
+        "#d88f3d", // Golden orange
+        "#f5b73d", // Warm yellow
+        "#c94d3c", // Deep red
+      ]);
+
+      const zoom = d3
+        .zoom()
+        .scaleExtent([1, 10])
+        .translateExtent([
+          [0, 0],
+          [width, height],
+        ])
+        .on("zoom", (event) => {
+          g.attr("transform", event.transform);
+        });
+
+      svg.call(zoom);
+
+      const initialTransform = d3.zoomIdentity.translate(0, 0).scale(1);
+
+      d3.select("#reset-zoom").on("click", function () {
+        svg
+          .transition()
+          .duration(750)
+          .call(zoom.transform, initialTransform)
+          .on("end", () => {
+            g.selectAll("circle").attr("r", (d) =>
+              selectedDots.has(d) ? 6 : 3
+            );
+          });
+      });
+
+      function drawNYCMap() {
+        const projection = d3
+          .geoMercator()
+          .scale(70000)
+          .center([-74, 40.7])
+          .translate([width / 2, height / 2]);
+        const path = d3.geoPath().projection(projection);
+        d3.json("nyc.geojson").then((geojson) => {
+          g.selectAll("path")
+            .data(geojson.features)
+            .enter()
+            .append("path")
+            .attr("d", path)
+            .attr("fill", "white")
+            .attr("stroke", "#333");
+        });
+      }
+
+      drawNYCMap();
+
+      async function loadData() {
+        let data = await d3.csv("CleanedNYC311data.csv");
+        const complaintTypesSet = new Set();
+        const complaintTypes = [];
+
+        data.forEach((d) => {
+          if (!complaintTypesSet.has(d["Complaint Type"])) {
+            complaintTypesSet.add(d["Complaint Type"]);
+            complaintTypes.push(d["Complaint Type"]);
+          }
+        });
+
+        complaintTypes.sort();
+
+        dropdown
+          .selectAll("option")
+          .data(["all", ...complaintTypes])
+          .enter()
+          .append("option")
+          .attr("value", (d) => d)
+          .text((d) => d);
+
+        function updateMap(filterType) {
+          selectedDots.clear();
+          let filteredData =
+            filterType === "all"
+              ? data
+              : data.filter((d) => d["Complaint Type"] === filterType);
+          const projection = d3
+            .geoMercator()
+            .scale(70000)
+            .center([-74, 40.7])
+            .translate([width / 2, height / 2]);
+
+          g.selectAll("circle").remove();
+
+          g.selectAll("circle")
+            .data(filteredData)
+            .enter()
+            .append("circle")
+            .attr("cx", (d) => projection([+d.Longitude, +d.Latitude])[0])
+            .attr("cy", (d) => projection([+d.Longitude, +d.Latitude])[1])
+            .attr("r", 2)
+            .attr("fill", "gray")
+            .attr("opacity", 0.7)
+            .style("cursor", "pointer")
+            .on("mouseover", (event, d) => {
+              tooltip
+                .style("display", "block")
+                .style("left", event.pageX + 10 + "px")
+                .style("top", event.pageY - 10 + "px")
+                .html(
+                  `<strong>${d["Complaint Type"]}</strong><br>${d.Descriptor}`
+                );
+            })
+            .on("mouseout", () => tooltip.style("display", "none"))
+            .on("click", function (event, d) {
+              if (selectedDots.has(d)) {
+                selectedDots.delete(d);
+                d3.select(this)
+                  .attr("fill", "gray")
+                  .attr("r", 3 / d3.zoomTransform(svg.node()).k);
+              } else {
+                let color = colorScale(selectedDots.size);
+                selectedDots.set(d, color);
+                d3.select(this)
+                  .attr("fill", color)
+                  .attr("opacity", 1)
+                  .attr("r", 6 / d3.zoomTransform(svg.node()).k);
+              }
+              renderInfoCards();
+              updateSelectedCircles();
+            });
+
+          renderInfoCards();
+          updateSelectedCircles();
+        }
+
+        function updateSelectedCircles() {
+          g.selectAll("circle")
+            .filter((d) => selectedDots.has(d))
+            .raise();
+        }
+
+        function renderInfoCards() {
+          infoContainer.selectAll(".info-card").remove();
+
+          if (selectedDots.size > 0) {
+            d3.select(".zoom-instructions").style("display", "none");
+          } else {
+            d3.select(".zoom-instructions").style("display", "block");
+          }
+
+          selectedDots.forEach((color, d) => {
+            let card = infoContainer
+              .append("div")
+              .attr("class", "info-card")
+              .attr("data-id", d.UniqueKey)
+              .style("border-color", color);
+
+            card.html(`
+      <button class="close-btn">x</button>
+      <strong>Borough:</strong> ${d.Borough}<br>
+      <strong>Complaint Type:</strong> ${d["Complaint Type"]}<br>
+      <strong>Description:</strong> ${d.Descriptor}<br>
+      <strong>Created Date:</strong> ${d["Created Date"]}<br>
+    `);
+
+            card.select(".close-btn").on("click", () => {
+              card.remove();
+              g.selectAll("circle")
+                .filter((item) => item === d)
+                .remove();
+              selectedDots.delete(d);
+              data = data.filter((item) => item !== d);
+
+              if (selectedDots.size > 0) {
+                d3.select(".zoom-instructions").style("display", "none");
+              } else {
+                d3.select(".zoom-instructions").style("display", "block");
+              }
+            });
+          });
+        }
+
+        dropdown.on("change", function () {
+          updateMap(this.value);
+        });
+        clearBtn.on("click", () => {
+          updateMap(dropdown.property("value"));
+          updateSelectedCircles();
+        });
+
+        updateMap("all");
+      }
+
+      loadData();
+
+      svg.call(
+        d3.zoom().on("zoom", (event) => {
+          g.attr("transform", event.transform);
+          g.selectAll("circle").attr("r", (d) =>
+            selectedDots.has(d) ? 6 / event.transform.k : 3 / event.transform.k
+          );
+        })
+      );
+
+      async function drawPieChart() {
+        let data = await d3.csv("CleanedNYC311data.csv");
+
+        const boroughAvg = Array.from(
+          d3.rollup(
+            data,
+            (v) => v.length,
+            (d) => d.Borough
+          )
+        ).map(([borough, count]) => ({ key: borough, value: count }));
+
+        const boroughMostCommon = Array.from(
+          d3.rollup(
+            data,
+            (v) =>
+              d3.rollup(
+                v,
+                (w) => w.length,
+                (w) => w["Complaint Type"]
+              ),
+            (d) => d.Borough
+          )
+        ).map(([borough, complaints]) => {
+          const mostCommonComplaint = Array.from(complaints)
+            .map(([complaintType, count]) => ({ complaintType, count }))
+            .sort((a, b) => b.count - a.count)[0];
+          return { borough, mostCommonComplaint };
+        });
+
+        const pie = d3
+          .pie()
+          .value((d) => d.value)
+          .sort(null);
+        const radius = Math.min(400, 400) / 2;
+
+        let color = colorScale.domain(boroughAvg.map((d) => d.key));
+        const arc = d3.arc().innerRadius(0).outerRadius(radius);
+
+        const svg = d3
+          .select("#pie-chart")
+          .append("g")
+          .attr("transform", "translate(" + radius + "," + radius + ")");
+
+        const arcs = svg
+          .selectAll(".arc")
+          .data(pie(boroughAvg))
+          .enter()
+          .append("g")
+          .attr("class", "arc");
+
+        arcs
+          .append("path")
+          .attr("d", arc)
+          .attr("fill", (d, i) => color(i));
+
+        arcs
+          .append("text")
+          // https://www.geeksforgeeks.org/d3-js-arc-centroid-function/
+          .attr("transform", (d) => "translate(" + arc.centroid(d) + ")")
+          .attr("dy", ".35em")
+          .attr("text-anchor", "middle")
+          .style("fill", "white")
+          .style("font-size", "12px")
+          .style("font-weight", "bold")
+          .text((d) => d.data.key);
+
+        const descriptions = d3.select("#descriptions");
+        descriptions.html("");
+
+        let totalComplaints = 0;
+        boroughAvg.forEach((d) => {
+          totalComplaints += d.value;
+        });
+
+        const averageComplaints = totalComplaints / boroughAvg.length;
+
+        descriptions.append("div").attr("class", "borough-description").html(`
+        <strong>Average Complaints Across All Boroughs:</strong> ${Math.round(
+          averageComplaints
+        )}
+      `);
+
+        boroughAvg.forEach((d) => {
+          const boroughData = boroughMostCommon.find(
+            (b) => b.borough === d.key
+          );
+          descriptions.append("div").attr("class", "borough-description").html(`
+          <span class="borough-name">${d.key}</span>: 
+          <span class="borough-average">Total Complaints: ${d.value}</span><br>
+          <span class="borough-most-common">Most Common Complaint: ${boroughData.mostCommonComplaint.complaintType} (${boroughData.mostCommonComplaint.count} complaints)</span>
+        `);
+        });
+      }
+
+      drawPieChart();
+    </script>
+  </body>
+</html>
