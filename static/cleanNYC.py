@@ -10,6 +10,12 @@ df_cleaned = df[columns_to_keep]
 # Drop rows with missing latitude or longitude
 df_cleaned = df_cleaned.dropna(subset=["Latitude", "Longitude"])
 
+# Filter out rows that are do not start with "Noise - " in the "Complaint Type" column
+df_cleaned = df_cleaned[df_cleaned["Complaint Type"].str.startswith("Noise - ", na=False)]
+
+# Remove "Others" in the Complaint Type column
+df_cleaned = df_cleaned[~df_cleaned["Complaint Type"].str.contains("Others", na=False)]
+
 # Save to a new CSV file
 df_cleaned.to_csv("CleanedNYC311data.csv", index=False)
 
